@@ -12,71 +12,100 @@ constexpr uint Factorial(uint n) {uint res = n; for (uint i = 1; i < n; i++) {re
 const uint MAX_SIZE = (1 << MAX_NUM_INPUTS) * Factorial(MAX_NUM_INPUTS);
 const uint MAX_POS_SIZE = 1 << MAX_NUM_INPUTS;
 
-uint8 phase[MAX_SIZE], pos[MAX_SIZE][MAX_POS_SIZE], phase_next[MAX_SIZE], pos_next[MAX_SIZE][MAX_POS_SIZE];
-uint ids[MAX_SIZE];
-bool perm[MAX_SIZE][MAX_NUM_INPUTS], perm_next[MAX_SIZE][MAX_NUM_INPUTS];
+uint8 pos[MAX_SIZE][MAX_POS_SIZE];
+bool perm[MAX_SIZE][MAX_NUM_INPUTS];
+uint8 phase_[MAX_SIZE], phase_next_[MAX_SIZE];
+uint ids_[MAX_SIZE], ids_next_[MAX_SIZE];
+
+void GeneratePermutationTable(uint8 num_inputs) {
+    uint n = Factorial(num_inputs);
+    uint num_prev_perm = 1;
+    for (uint i = 0; i < n; i++) {
+        pos[i][0] = 0;
+        for (uint8 j = 0; j < num_inputs; j++) perm[i][j] = true;
+    }
+
+    for (uint8 k = 0; k < num_inputs; k++) {
+        uint8 num_levels = 1 << k;
+        uint8 num_perm = num_inputs - k;
+        uint num_duplicate = n / num_prev_perm / num_perm;
+        uint id = 0;
+        for (uint i = 0; i < num_prev_perm; i++) {
+            for (uint8 j = 0; j < num_inputs; j++) if (perm[id][j]) {
+                for (uint t = 0; t < num_duplicate; t++) {
+                    perm[id][j] = false;
+                    for (uint8 l = 0; l < num_levels; l++) {
+                        pos[id][num_levels + l] = pos[id][l] + (1 << j);
+                    }
+                    id++;
+                }
+            }
+        }
+        num_prev_perm *= num_perm;
+    }
+}
 
 ulonglong NpCanonicalRepresentation(bool* tt, uint8 num_inputs) {
+    uint n = Factorial(num_inputs);
     uint8 tt_size = 1 << num_inputs;
     bool all_false = true;
     for (uint8 i = 0; i < tt_size; i++) {
         if (tt[i]) {all_false = false; break;}
     }
     if (all_false) return 0;
+
+    auto phase = phase_, phase_next = phase_next_;
+    auto ids = ids_, ids_next = ids_next_;
+
     uint q_size = 0;
     for (uint8 i = 0; i < tt_size; i++) {
         if (tt[i]) {
             phase[q_size] = i;
-            for (uint8 j = 0; j < num_inputs; j++) perm[q_size][j] = true;
+            ids[q_size] = 0;
             q_size++;
         }
     }
+    uint num_prev_perm = 1;
     for (uint8 k = 0; k < num_inputs; k++) {
         uint8 num_levels = 1 << k;
+        uint8 num_perm = num_inputs - k;
+        uint num_duplicate = n / num_prev_perm / num_perm;
         uint q_next_size = 0;
         for (uint i = 0; i < q_size; i++) {
-            for (uint8 j = 0; j < num_inputs; j++) {
-                if (perm[i][j]) {
-                    for (uint8 l = 0; l < num_levels; l++) {
-                        pos_next[q_next_size][l] = pos[i][l];
-                        pos_next[q_next_size][l + num_levels] = pos[i][l] + (1 << j);
-                    }
-                    phase_next[q_next_size] = phase[i];
-                    ids[q_next_size] = q_next_size;
-                    for (uint8 l = 0; l < num_inputs; l++) perm_next[q_next_size][l] = perm[i][l];
-                    perm_next[q_next_size][j] = false;
-                    q_next_size++;
-                }
+            for (uint8 j = 0; j < num_perm; j++) {
+                phase_next[q_next_size] = phase[i];
+                ids_next[q_next_size] = ids[i] + j * num_duplicate;
+                q_next_size++;
             }
         }
-        uint pos_next_size = q_next_size;
+        swap<uint*>(ids, ids_next);
+        swap<uint8*>(phase, phase_next);
+        q_size = q_next_size;
         for (uint8 l = 0; l < num_levels; l++) {
+            q_next_size = 0;
             bool all_zeros = true;
-            uint post_next_new_size = 0;
-            for (uint i = 0; i < pos_next_size; i++) {
-                uint8 pos_1_phase_l = phase_next[ids[i]] ^ pos_next[ids[i]][l + num_levels];
+            for (uint i = 0; i < q_size; i++) {
+                uint8 pos_1_phase_l = phase[i] ^ pos[ids[i]][l + num_levels];
                 bool seq_part_l = tt[pos_1_phase_l];
                 if (all_zeros && seq_part_l) {
                     all_zeros = false;
-                    post_next_new_size = 0;
+                    q_next_size = 0;
                 }
                 if (all_zeros || seq_part_l) {
-                    ids[post_next_new_size] = ids[i];
-                    post_next_new_size++;
+                    phase_next[q_next_size] = phase[i];
+                    ids_next[q_next_size] = ids[i];
+                    q_next_size++;
                 }
             }
-            pos_next_size = post_next_new_size;
+            swap<uint*>(ids, ids_next);
+            swap<uint8*>(phase, phase_next);
+            q_size = q_next_size;
         }
-        for (uint i = 0; i < pos_next_size; i++) {
-            phase[i] = phase_next[ids[i]];
-            for (uint8 l = 0; l < num_levels * 2; l++) pos[i][l] = pos_next[ids[i]][l];
-            for (uint8 j = 0; j < num_inputs; j++) perm[i][j] = perm_next[ids[i]][j];
-        }
-        q_size = pos_next_size;
+        num_prev_perm *= num_perm;
     }
     ulonglong c = 0;
     for (uint8 i = 0; i < tt_size; i++) {
-        if (tt[phase[0] ^ pos[0][i]]) c+= (ulonglong)(1) << (tt_size - 1 - i);
+        if (tt[phase[0] ^ pos[ids[0]][i]]) c+= (ulonglong)(1) << (tt_size - 1 - i);
     }
     return c;
 }
@@ -92,8 +121,11 @@ ulonglong NpnCanonicalRepresentation(bool* tt, uint8 num_inputs) {
 int main() {
     map<ulonglong, ulonglong> counter;
     uint8 num_inputs = 6;
+    GeneratePermutationTable(num_inputs);
     uint8 tt_size = 1 << num_inputs;
-    bool tt[tt_size]; // = {true, true, true, false, true, true, true, true} ;
+//    bool tt_test[8] = {true, true, true, false, true, true, true, true};
+//    NpnCanonicalRepresentation(tt_test, 3);
+    bool tt[tt_size];
     ulonglong max_tt_num = 0;
     for (uint8 i = 0; i < tt_size; i++) max_tt_num += (ulonglong)(1) << i;
     auto start_time = chrono::system_clock::now();
