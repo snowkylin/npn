@@ -12,24 +12,11 @@ constexpr uint Factorial(uint n) {uint res = n; for (uint i = 1; i < n; i++) {re
 const uint MAX_SIZE = (1 << MAX_NUM_INPUTS) * Factorial(MAX_NUM_INPUTS);
 const uint MAX_POS_SIZE = 1 << MAX_NUM_INPUTS;
 
-uint8 phase_[MAX_SIZE], pos_[MAX_SIZE][MAX_POS_SIZE], phase_next_[MAX_SIZE], pos_next_[MAX_SIZE][MAX_POS_SIZE];
-uint ids_[MAX_SIZE];
-bool perm_[MAX_SIZE][MAX_NUM_INPUTS], perm_next_[MAX_SIZE][MAX_NUM_INPUTS];
-
-//void SwapArrays(uint8 * &a, uint8 * &b) {
-//    uint8 * c = a;
-//    a = b;
-//    b = c;
-//}
+uint8 phase[MAX_SIZE], pos[MAX_SIZE][MAX_POS_SIZE], phase_next[MAX_SIZE], pos_next[MAX_SIZE][MAX_POS_SIZE];
+uint ids[MAX_SIZE];
+bool perm[MAX_SIZE][MAX_NUM_INPUTS], perm_next[MAX_SIZE][MAX_NUM_INPUTS];
 
 ulonglong NpCanonicalRepresentation(bool* tt, uint8 num_inputs) {
-    auto phase = phase_;
-    auto pos = pos_;
-    auto perm = perm_;
-    auto phase_next = phase_next_;
-    auto pos_next = pos_next_;
-    auto perm_next = perm_next_;
-    auto ids = ids_;
     uint8 tt_size = 1 << num_inputs;
     bool all_false = true;
     for (uint8 i = 0; i < tt_size; i++) {
@@ -85,9 +72,6 @@ ulonglong NpCanonicalRepresentation(bool* tt, uint8 num_inputs) {
             for (uint8 l = 0; l < num_levels * 2; l++) pos[i][l] = pos_next[ids[i]][l];
             for (uint8 j = 0; j < num_inputs; j++) perm[i][j] = perm_next[ids[i]][j];
         }
-//        swap<uint8*>(phase, phase_next);
-//        swap<uint8*>(pos, pos_next);
-//        swap<bool (*) [6]>(perm, perm_next);
         q_size = pos_next_size;
     }
     ulonglong c = 0;
@@ -117,8 +101,7 @@ int main() {
         for (uint8 i = 0; i < tt_size; i++) tt[i] = (tt_num >> i) & 1;
         ulonglong c = NpnCanonicalRepresentation(tt, num_inputs);
         counter[c]++;
-//        cout << NpCanonicalRepresentation(tt, 3) << endl;
-        if (tt_num % 100 == 0) {
+        if (tt_num % 10000 == 0) {
             auto current_time = chrono::system_clock::now();
             auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
             cout << tt_num << " " << counter.size() << " " << double(duration.count()) / 1000 << endl;
