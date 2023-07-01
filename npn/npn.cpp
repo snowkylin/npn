@@ -2,6 +2,12 @@
 #include <map>
 #include <chrono>
 
+#ifdef _WIN32
+#    define LIBRARY_API __declspec(dllexport)
+#else
+#    define LIBRARY_API
+#endif
+
 using namespace std;
 
 typedef unsigned int uint;
@@ -9,13 +15,20 @@ typedef char uint8;
 typedef unsigned long long ulonglong;
 const uint8 MAX_NUM_INPUTS = 6;
 constexpr uint Factorial(uint n) {uint res = n; for (uint i = 1; i < n; i++) {res *= i;} return res;}
-const uint MAX_SIZE = (1 << MAX_NUM_INPUTS) * Factorial(MAX_NUM_INPUTS);
+const uint MAX_PERM_SIZE = Factorial(MAX_NUM_INPUTS);
+const uint MAX_SIZE = (1 << MAX_NUM_INPUTS) * MAX_PERM_SIZE;
 const uint MAX_POS_SIZE = 1 << MAX_NUM_INPUTS;
 
-uint8 pos[MAX_SIZE][MAX_POS_SIZE];
-bool perm[MAX_SIZE][MAX_NUM_INPUTS];
+uint8 pos[MAX_PERM_SIZE][MAX_POS_SIZE];
+bool perm[MAX_PERM_SIZE][MAX_NUM_INPUTS];
 uint8 phase_[MAX_SIZE], phase_next_[MAX_SIZE];
 uint ids_[MAX_SIZE], ids_next_[MAX_SIZE];
+
+extern "C" {
+    LIBRARY_API void GeneratePermutationTable(uint8 num_inputs);
+    LIBRARY_API ulonglong NpnCanonicalRepresentative(bool* tt, uint8 num_inputs);
+    LIBRARY_API ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs);
+}
 
 void GeneratePermutationTable(uint8 num_inputs) {
     uint n = Factorial(num_inputs);
@@ -45,9 +58,9 @@ void GeneratePermutationTable(uint8 num_inputs) {
     }
 }
 
-ulonglong NpCanonicalRepresentation(bool* tt, uint8 num_inputs) {
+ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs) {
     uint n = Factorial(num_inputs);
-    uint8 tt_size = 1 << num_inputs;
+    uint tt_size = 1 << num_inputs;
     bool all_false = true;
     for (uint8 i = 0; i < tt_size; i++) {
         if (tt[i]) {all_false = false; break;}
@@ -110,28 +123,28 @@ ulonglong NpCanonicalRepresentation(bool* tt, uint8 num_inputs) {
     return c;
 }
 
-ulonglong NpnCanonicalRepresentation(bool* tt, uint8 num_inputs) {
-    ulonglong c_1 = NpCanonicalRepresentation(tt, num_inputs);
+ulonglong NpnCanonicalRepresentative(bool* tt, uint8 num_inputs) {
+    ulonglong c_1 = NpCanonicalRepresentative(tt, num_inputs);
     for (uint8 i = 0; i < 1 << num_inputs; i++) tt[i] = !tt[i];
-    ulonglong c_2 = NpCanonicalRepresentation(tt, num_inputs);
+    ulonglong c_2 = NpCanonicalRepresentative(tt, num_inputs);
     for (uint8 i = 0; i < 1 << num_inputs; i++) tt[i] = !tt[i];
     return (c_1 > c_2)? c_1 : c_2;
 }
 
-int main() {
+/*int main() {
     map<ulonglong, ulonglong> counter;
-    uint8 num_inputs = 6;
+    const uint8 num_inputs = 6;
     GeneratePermutationTable(num_inputs);
-    uint8 tt_size = 1 << num_inputs;
+    const uint tt_size = 1 << num_inputs;
 //    bool tt_test[8] = {true, true, true, false, true, true, true, true};
-//    NpnCanonicalRepresentation(tt_test, 3);
+//    NpnCanonicalRepresentative(tt_test, 3);
     bool tt[tt_size];
     ulonglong max_tt_num = 0;
     for (uint8 i = 0; i < tt_size; i++) max_tt_num += (ulonglong)(1) << i;
     auto start_time = chrono::system_clock::now();
     for (ulonglong tt_num = 0; tt_num <= max_tt_num; tt_num++) {
         for (uint8 i = 0; i < tt_size; i++) tt[i] = (tt_num >> i) & 1;
-        ulonglong c = NpnCanonicalRepresentation(tt, num_inputs);
+        ulonglong c = NpnCanonicalRepresentative(tt, num_inputs);
         counter[c]++;
         if (tt_num % 10000 == 0) {
             auto current_time = chrono::system_clock::now();
@@ -142,4 +155,4 @@ int main() {
     }
     cout << counter.size() << endl;
     return 0;
-}
+}*/
