@@ -6,6 +6,12 @@ The backend of this package is implemented by C++ for efficiency.
 
 Currently this package only support boolean functions with number of inputs <= 6, as the canonical representative is returned as an unsigned long long with 2^6 bits. Please file a feature request if you need more.
 
+## Install
+
+```bash
+pip install npn
+```
+
 ## Usage
 
 ```python
