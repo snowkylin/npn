@@ -20,22 +20,24 @@ const uint MAX_SIZE = (1 << MAX_NUM_INPUTS) * MAX_PERM_SIZE;
 const uint MAX_POS_SIZE = 1 << MAX_NUM_INPUTS;
 
 uint8 pos[MAX_PERM_SIZE][MAX_POS_SIZE];
-bool perm[MAX_PERM_SIZE][MAX_NUM_INPUTS];
+uint8 perm[MAX_PERM_SIZE][MAX_NUM_INPUTS];
 uint8 phase_[MAX_SIZE], phase_next_[MAX_SIZE];
 uint ids_[MAX_SIZE], ids_next_[MAX_SIZE];
 
+uint8 c_num_inputs;
+
 extern "C" {
-    LIBRARY_API void GeneratePermutationTable(uint8 num_inputs);
-    LIBRARY_API ulonglong NpnCanonicalRepresentative(bool* tt, uint8 num_inputs);
-    LIBRARY_API ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs);
+    LIBRARY_API uint8* GeneratePermutationTable(uint8 num_inputs);
+    LIBRARY_API ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint8* phase_p, uint* id_p);
+    LIBRARY_API ulonglong NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint8* phase_p, uint* id_p, bool* not_p);
 }
 
-void GeneratePermutationTable(uint8 num_inputs) {
+uint8* GeneratePermutationTable(uint8 num_inputs) {
     uint n = Factorial(num_inputs);
     uint num_prev_perm = 1;
     for (uint i = 0; i < n; i++) {
         pos[i][0] = 0;
-        for (uint8 j = 0; j < num_inputs; j++) perm[i][j] = true;
+        for (uint8 j = 0; j < num_inputs; j++) perm[i][j] = num_inputs;
     }
 
     for (uint8 k = 0; k < num_inputs; k++) {
@@ -44,9 +46,9 @@ void GeneratePermutationTable(uint8 num_inputs) {
         uint num_duplicate = n / num_prev_perm / num_perm;
         uint id = 0;
         for (uint i = 0; i < num_prev_perm; i++) {
-            for (uint8 j = 0; j < num_inputs; j++) if (perm[id][j]) {
+            for (uint8 j = 0; j < num_inputs; j++) if (perm[id][j] == num_inputs) {
                 for (uint t = 0; t < num_duplicate; t++) {
-                    perm[id][j] = false;
+                    perm[id][j] = k;
                     for (uint8 l = 0; l < num_levels; l++) {
                         pos[id][num_levels + l] = pos[id][l] + (1 << j);
                     }
@@ -56,9 +58,11 @@ void GeneratePermutationTable(uint8 num_inputs) {
         }
         num_prev_perm *= num_perm;
     }
+    c_num_inputs = num_inputs;
+    return (uint8*) perm;
 }
 
-ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs) {
+ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint8* phase_p, uint* id_p) {
     uint n = Factorial(num_inputs);
     uint tt_size = 1 << num_inputs;
     bool all_false = true;
@@ -98,7 +102,7 @@ ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs) {
             q_next_size = 0;
             bool all_zeros = true;
             for (uint i = 0; i < q_size; i++) {
-                uint8 pos_1_phase_l = phase[i] ^ pos[ids[i]][l + num_levels];
+                uint8 pos_1_phase_l = phase[i] ^ pos[ids[i]][l + num_levels];   // xor, true when two operands are different
                 bool seq_part_l = tt[pos_1_phase_l];
                 if (all_zeros && seq_part_l) {
                     all_zeros = false;
@@ -117,18 +121,35 @@ ulonglong NpCanonicalRepresentative(bool* tt, uint8 num_inputs) {
         num_prev_perm *= num_perm;
     }
     ulonglong c = 0;
+    uint8 c_phase = phase[0];
+    uint c_id = ids[0];
     for (uint8 i = 0; i < tt_size; i++) {
-        if (tt[phase[0] ^ pos[ids[0]][i]]) c+= (ulonglong)(1) << (tt_size - 1 - i);
+        if (tt[c_phase ^ pos[c_id][i]]) c+= (ulonglong)(1) << (tt_size - 1 - i);
     }
+    *phase_p = c_phase;
+    *id_p = c_id;
     return c;
 }
 
-ulonglong NpnCanonicalRepresentative(bool* tt, uint8 num_inputs) {
-    ulonglong c_1 = NpCanonicalRepresentative(tt, num_inputs);
+ulonglong NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint8* phase_p, uint* id_p, bool* not_p) {
+    c_num_inputs = num_inputs;
+    uint8 c_phase_0, c_phase_1;
+    uint c_id_0, c_id_1;
+    ulonglong c_1 = NpCanonicalRepresentative(tt, num_inputs, &c_phase_0, &c_id_0);
     for (uint8 i = 0; i < 1 << num_inputs; i++) tt[i] = !tt[i];
-    ulonglong c_2 = NpCanonicalRepresentative(tt, num_inputs);
+    ulonglong c_2 = NpCanonicalRepresentative(tt, num_inputs, &c_phase_1, &c_id_1);
     for (uint8 i = 0; i < 1 << num_inputs; i++) tt[i] = !tt[i];
-    return (c_1 > c_2)? c_1 : c_2;
+    if (c_1 > c_2) {
+        *phase_p = c_phase_0;
+        *id_p = c_id_0;
+        *not_p = false;
+        return c_1;
+    } else {
+        *phase_p = c_phase_1;
+        *id_p = c_id_1;
+        *not_p = true;
+        return c_2;
+    }
 }
 
 /*int main() {
