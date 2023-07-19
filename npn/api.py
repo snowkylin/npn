@@ -102,6 +102,18 @@ def tt_to_int(tt):      # use reverse order, see line 1482 of src/misc/util/util
     return res
 
 
+def int_to_tt(n, num_inputs=None):
+    if num_inputs is None:
+        num_inputs = base_2_log(base_2_log(n + 1))
+    tt = [False] * (2 ** num_inputs)
+    for i in reversed(range(2 ** num_inputs)):
+        tt[i] = n % 2 == 1
+        n >>= 1
+        if n == 0:
+            break
+    return tt
+
+
 # num_inputs = 2
 # generate_permutation_table(num_inputs)
 # # p = [0] * num_inputs
