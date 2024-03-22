@@ -4,7 +4,7 @@ This package is a boolean matcher. It simply computes the canonical representati
 
 The backend of this package is implemented by C++ for efficiency.
 
-Currently this package only support boolean functions with number of inputs <= 6, as the canonical representative is returned as an unsigned long long with 2^6 bits. Please file a feature request if you need more.
+Currently, this package supports boolean functions with number of inputs <= 8.
 
 ## Install
 
@@ -19,18 +19,19 @@ import npn
 
 # the truth table of f(x_2, x_1, x_0) as [f(0, 0, 0), f(0, 0, 1), f(0, 1, 0), f(0, 1, 1), ...]
 tt = [True, True, True, False, True, True, True, True]
-c = npn.npn_canonical_representative(tt)    # c = 254 (11111101)
+c = npn.npn_canonical_representative(tt)    # [True, True, True, True, True, True, True, False]
+c_int = npn.tt_to_int(c)                    # 254 (11111110)
 # return the NPN transformation information (phase, perm, output_inv)
 # here phase = [False, False, True], perm = [0, 1, 2] and output_inv = False
 # which means (x_0, x_1, x_2) should be mapped to (x_0, x_1, x_2), then the third variable (x_2) should be inverted
 # and the final result should not be inverted
-# note that permutation should be applied first before the invertion (see Section 2.1 of [1])
+# note that permutation should be applied first before the inverse (see Section 2.1 of [1])
 c, phase, perm, output_inv = npn.npn_canonical_representative(tt, return_details=True)
 ```
 
 ## Build
 
-Compile the shared library `npn.dll` and `libnpn.so` via CMake on Windows and Linux environment, place them in the `\npn` folder, then
+Compile the shared library `libnpn.dll` and `libnpn.so` via CMake on Windows and Linux environment, place them in the `\npn` folder, then
 
 ```bash
 python setup.py sdist

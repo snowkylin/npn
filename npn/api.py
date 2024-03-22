@@ -6,13 +6,13 @@ import platform
 
 this_dir = os.path.abspath(os.path.dirname(__file__))
 if platform.system() == 'Windows':
-    mod = ctypes.cdll.LoadLibrary(this_dir + "/npn.dll")
+    mod = ctypes.cdll.LoadLibrary(this_dir + "/libnpn.dll")
 else:
     mod = ctypes.cdll.LoadLibrary(this_dir + "/libnpn.so")
-# mod = ctypes.cdll.LoadLibrary("cmake-build-release/npn.dll")
+# mod = ctypes.cdll.LoadLibrary("cmake-build-release/libnpn.dll")
 # mod = ctypes.cdll.LoadLibrary("cmake-build-release/libnpn.so")
 
-max_num_inputs = 6
+max_num_inputs = 8
 
 c_bool_p = ctypes.POINTER(ctypes.c_bool)
 
@@ -22,8 +22,8 @@ generate_permutation_table_cpp.restype = ctypes.POINTER(ctypes.c_uint8)
 
 npn_canonical_representative_cpp = mod.NpnCanonicalRepresentative
 npn_canonical_representative_cpp.argtypes = (c_bool_p, ctypes.c_uint8,
-                                             ctypes.POINTER(ctypes.c_uint8), ctypes.POINTER(ctypes.c_uint), c_bool_p)
-npn_canonical_representative_cpp.restype = ctypes.c_ulonglong
+                                             ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint), c_bool_p)
+npn_canonical_representative_cpp.restype = ctypes.POINTER(ctypes.c_bool)
 
 current_num_inputs = -1
 perm_table = None
@@ -49,10 +49,11 @@ def npn_canonical_representative(tt, num_inputs=None, return_details=False):
         print("Permutation table generated for %d-input functions" % num_inputs)
     if isinstance(tt, list) or isinstance(tt, tuple):
         tt = (ctypes.c_bool * len(tt))(*tt)
-    phase = ctypes.c_uint8()
+    phase = ctypes.c_uint()
     id = ctypes.c_uint()
     output_inv = ctypes.c_bool()
-    c = npn_canonical_representative_cpp(tt, num_inputs, ctypes.pointer(phase), ctypes.pointer(id), ctypes.pointer(output_inv))
+    c_ptr = npn_canonical_representative_cpp(tt, num_inputs, ctypes.pointer(phase), ctypes.pointer(id), ctypes.pointer(output_inv))
+    c = [c_ptr[i] for i in range(len(tt))]
     if return_details:
         phase = [bool(phase.value & (1 << i)) for i in range(num_inputs)]
         p = [perm_table[i] for i in range(max_num_inputs * id.value, max_num_inputs * id.value + num_inputs)]
@@ -117,7 +118,7 @@ def int_to_tt(n, num_inputs=None):
 # num_inputs = 2
 # generate_permutation_table(num_inputs)
 # # p = [0] * num_inputs
-# # p_ctypes = (ctypes.c_uint8 * len(p))(*p)
+# # p_ctypes = (ctypes.c_uint * len(p))(*p)
 # tt = [False, True, False, True]
 # # tt = [False, False, False, True, False, False, False, False]
 # # tt = [True, True, True, False, True, True, True, True]  # f(x_2, x_1, x_0) = x_2 + not(x_1) + not(x_0)
