@@ -27,8 +27,8 @@ bool res[MAX_POS_SIZE];
 
 extern "C" {
     LIBRARY_API uint8* GeneratePermutationTable(uint8 num_inputs);
-    LIBRARY_API bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p);
-    LIBRARY_API bool* NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p, bool* not_p);
+    LIBRARY_API bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p, bool refinement);
+    LIBRARY_API bool* NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p, bool* not_p, bool refinement);
 }
 
 uint8* GeneratePermutationTable(uint8 num_inputs) {
@@ -88,7 +88,7 @@ uint8* GeneratePermutationTable(uint8 num_inputs) {
     return (uint8*) perm;
 }
 
-bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p) {
+bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p, bool refinement) {
     uint n = Factorial(num_inputs);
     uint tt_size = 1 << num_inputs;
     bool all_false = true;
@@ -104,6 +104,10 @@ bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint*
     auto ids = ids_, ids_next = ids_next_;
 
     uint q_size = 0;
+    /*
+     * The initial phases are the ones that can make the first bit of the transformed truth table be 1
+     * For example, when f(1, 1, 0) = 1, phase = (1, 1, 0) can make f'(0, 0, 0) = f(1, 1, 0) = 1
+     */
     for (uint i = 0; i < tt_size; i++) {
         if (tt[i]) {
             phase[q_size] = i;
@@ -111,12 +115,61 @@ bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint*
             q_size++;
         }
     }
+    if (refinement) {
+        /*
+         * Selecting the phases with minimal row sum, see Sec 3.1 of "Building a Better Boolean Matcher and Symmetry Detector" for details
+         */
+        uint row_sum[q_size];
+        uint min_row_sum = tt_size * num_inputs;
+        for (uint i = 0; i < q_size; i++) {
+            row_sum[i] = 0;
+            for (uint j = 0; j < tt_size; j++) {
+                if (tt[j ^ phase[i]]) {
+                    for (uint k = 0; k < num_inputs; k++) row_sum[i] += (j >> k) & 1;
+                }
+            }
+            if (row_sum[i] < min_row_sum) min_row_sum = row_sum[i];
+        }
+        uint row_squared_sum[q_size];
+        uint min_row_squared_sum = tt_size * num_inputs * num_inputs;
+        for (uint i = 0; i < q_size; i++) {
+            if (row_sum[i] == min_row_sum) {
+                row_squared_sum[i] = 0;
+                for (uint j = 0; j < tt_size; j++) {
+                    if (tt[j ^ phase[i]]) {
+                        uint num_ones = 0;
+                        for (uint k = 0; k < num_inputs; k++) num_ones += (j >> k) & 1;
+                        row_squared_sum[i] += num_ones * num_ones;
+                    }
+                }
+                if (row_squared_sum[i] < min_row_squared_sum) min_row_squared_sum = row_squared_sum[i];
+            }
+        }
+        uint q_next_size = 0;
+        for (uint i = 0; i < q_size; i++) {
+            if (row_sum[i] == min_row_sum and row_squared_sum[i] == min_row_squared_sum) {
+                row_squared_sum[i] = 0;
+                phase_next[q_next_size] = phase[i];
+                ids_next[q_next_size] = ids[i];
+                q_next_size++;
+            }
+        }
+        q_size = q_next_size;
+        swap<uint*>(phase, phase_next);
+        swap<uint*>(ids, ids_next);
+    }
     uint num_prev_perm = 1;
     for (uint k = 0; k < num_inputs; k++) {
         uint num_levels = 1 << k;
         uint num_perm = num_inputs - k;
         uint num_duplicate = n / num_prev_perm / num_perm;
         uint q_next_size = 0;
+        /*
+         * Expand each of the item in the queue for `num_perm` times with different ids (columns/first axis in the permutation table)
+         * For example, 
+         * for k = 0, phase = ... and id = 0, we need to keep the phase and expand id to 0+0, 0+2, 0+4, corresponding to 3 possible positions of x_0
+         * for k = 1, phase = ... and id = 2, we need to keep the phase and expand id to 2+0, 2+1, corresponding to 2 possible positions of x_1
+         */
         for (uint i = 0; i < q_size; i++) {
             for (uint j = 0; j < num_perm; j++) {
                 phase_next[q_next_size] = phase[i];
@@ -124,15 +177,22 @@ bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint*
                 q_next_size++;
             }
         }
-        swap<uint*>(ids, ids_next);
         swap<uint*>(phase, phase_next);
+        swap<uint*>(ids, ids_next);
+        /*
+         * Filter the queue so that only those whose `num_levels + l`th bit in the transformed truth table equals to 1 are preserved
+         * The value of the bit in the transformed truth table can be calculated by 
+         * 1. find the `num_levels + l`th row of the id-th column in the position table, which is the position without phase transformation
+         * 2. apply bitwise XOR between the above position and phase, so as to apply phase transformation to the above position 
+         * It is possible that all the `num_levels + l`th bit in the queue are equal to 0. In this case we need to keep all the items in the queue
+         */
         q_size = q_next_size;
         for (uint l = 0; l < num_levels; l++) {
             q_next_size = 0;
             bool all_zeros = true;
             for (uint i = 0; i < q_size; i++) {
-                uint pos_1_phase_l = phase[i] ^ pos[ids[i]][l + num_levels];   // xor, true when two operands are different
-                bool seq_part_l = tt[pos_1_phase_l];
+                uint new_pos = phase[i] ^ pos[ids[i]][l + num_levels];   // xor, true when two operands are different
+                bool seq_part_l = tt[new_pos];
                 if (all_zeros && seq_part_l) {
                     all_zeros = false;
                     q_next_size = 0;
@@ -143,8 +203,8 @@ bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint*
                     q_next_size++;
                 }
             }
-            swap<uint*>(ids, ids_next);
             swap<uint*>(phase, phase_next);
+            swap<uint*>(ids, ids_next);
             q_size = q_next_size;
         }
         num_prev_perm *= num_perm;
@@ -159,15 +219,34 @@ bool* NpCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint*
     return (bool*) res;
 }
 
-bool* NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p, bool* not_p) {
+bool* NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint* id_p, bool* not_p, bool refinement) {
+    uint tt_size = 1 << num_inputs;
+    if (refinement) {
+        /*
+         * See Section 2.2 of "Building a Better Boolean Matcher and Symmetry Detector" for details
+         */
+        uint num_ones = 0;
+        for (uint i = 0; i < tt_size; i++)
+            if (tt[i]) num_ones++;
+        if (num_ones < tt_size / 2) {
+            NpCanonicalRepresentative(tt, num_inputs, phase_p, id_p, refinement);
+            *not_p = false;
+            return (bool*) res;
+        } else if (num_ones > tt_size / 2) {
+            for (uint i = 0; i < tt_size; i++) tt[i] = !tt[i];
+            NpCanonicalRepresentative(tt, num_inputs, phase_p, id_p, refinement);
+            *not_p = true;
+            for (uint i = 0; i < tt_size; i++) tt[i] = !tt[i];
+            return (bool*) res;
+        }
+    }
     uint c_phase_0, c_phase_1;
     uint c_id_0, c_id_1;
-    uint tt_size = 1 << num_inputs;
     bool c_0[tt_size];
     bool c_1[tt_size];
-    NpCanonicalRepresentative(tt, num_inputs, &c_phase_0, &c_id_0);
+    NpCanonicalRepresentative(tt, num_inputs, &c_phase_0, &c_id_0, refinement);
     for (uint i = 0; i < tt_size; i++) {c_0[i] = res[i]; tt[i] = !tt[i];}
-    NpCanonicalRepresentative(tt, num_inputs, &c_phase_1, &c_id_1);
+    NpCanonicalRepresentative(tt, num_inputs, &c_phase_1, &c_id_1, refinement);
     for (uint i = 0; i < tt_size; i++) {c_1[i] = res[i]; tt[i] = !tt[i];}
     for (uint i = 0; i < tt_size; i++) {
         if (c_0[i] && !c_1[i]) {
@@ -187,13 +266,15 @@ bool* NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint
     return (bool*) res;
 }
 
-/*int main() {
-    map<ulonglong, ulonglong> counter;
+int main() {
+//    map<ulonglong, ulonglong> counter;
     const uint num_inputs = 3;
     GeneratePermutationTable(num_inputs);
     const uint tt_size = 1 << num_inputs;
-//    bool tt_test[8] = {true, true, true, false, true, true, true, true};
-//    NpnCanonicalRepresentative(tt_test, 3);
+    bool tt_test[8] = {true, true, true, false, true, true, true, true};
+    uint phase, id;
+    bool output_inv;
+    NpnCanonicalRepresentative(tt_test, 3, &phase, &id, &output_inv, true);
 //    bool tt[tt_size];
 //    ulonglong max_tt_num = 0;
 //    for (uint i = 0; i < tt_size; i++) max_tt_num += (ulonglong)(1) << i;
@@ -211,4 +292,4 @@ bool* NpnCanonicalRepresentative(bool* tt, uint8 num_inputs, uint* phase_p, uint
 //    }
 //    cout << counter.size() << endl;
     return 0;
-}*/
+}

@@ -21,13 +21,15 @@ import npn
 tt = [True, True, True, False, True, True, True, True]
 c = npn.npn_canonical_representative(tt)    # [True, True, True, True, True, True, True, False]
 c_int = npn.tt_to_int(c)                    # 254 (11111110)
-# return the NPN transformation information (phase, perm, output_inv)
-# here phase = [False, False, True], perm = [0, 1, 2] and output_inv = False
-# which means (x_0, x_1, x_2) should be mapped to (x_0, x_1, x_2), then the third variable (x_2) should be inverted
-# and the final result should not be inverted
-# note that permutation should be applied first before the inverse (see Section 2.1 of [1])
-c, phase, perm, output_inv = npn.npn_canonical_representative(tt, return_details=True)
+c, phase, perm, output_inv = npn.npn_canonical_representative(tt, return_details=True, refinement=True)
 ```
+
+- Set `return_details` parameter to `True` to return the NPN transformation information (`phase, perm, output_inv`).
+For example, here `phase = [False, False, True]`, `perm = [0, 1, 2]` and `output_inv = False` 
+means `(x_0, x_1, x_2)` should be mapped to `(x_0, x_1, x_2)`, then the third variable (`x_2`) should be inverted
+and the final result should not be inverted.
+- Set `refinement` parameter to `True` to accelerate computation while breaking the lexicographical order of truth tables.
+See "Building a Better Boolean Matcher and Symmetry Detector" for details.
 
 ## Build
 

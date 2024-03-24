@@ -22,8 +22,8 @@ generate_permutation_table_cpp.restype = ctypes.POINTER(ctypes.c_uint8)
 
 npn_canonical_representative_cpp = mod.NpnCanonicalRepresentative
 npn_canonical_representative_cpp.argtypes = (c_bool_p, ctypes.c_uint8,
-                                             ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint), c_bool_p)
-npn_canonical_representative_cpp.restype = ctypes.POINTER(ctypes.c_bool)
+                                             ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint), c_bool_p, ctypes.c_bool)
+npn_canonical_representative_cpp.restype = c_bool_p
 
 current_num_inputs = -1
 perm_table = None
@@ -41,7 +41,7 @@ def generate_permutation_table(num_inputs):
         print("Warning: the permutation table with num_inputs = %d is already generated" % num_inputs)
 
 
-def npn_canonical_representative(tt, num_inputs=None, return_details=False):
+def npn_canonical_representative(tt, num_inputs=None, return_details=False, refinement=False):
     if num_inputs is None:
         num_inputs = base_2_log(len(tt))
     if num_inputs != current_num_inputs:
@@ -52,7 +52,7 @@ def npn_canonical_representative(tt, num_inputs=None, return_details=False):
     phase = ctypes.c_uint()
     id = ctypes.c_uint()
     output_inv = ctypes.c_bool()
-    c_ptr = npn_canonical_representative_cpp(tt, num_inputs, ctypes.pointer(phase), ctypes.pointer(id), ctypes.pointer(output_inv))
+    c_ptr = npn_canonical_representative_cpp(tt, num_inputs, ctypes.pointer(phase), ctypes.pointer(id), ctypes.pointer(output_inv), refinement)
     c = [c_ptr[i] for i in range(len(tt))]
     if return_details:
         phase = [bool(phase.value & (1 << i)) for i in range(num_inputs)]
